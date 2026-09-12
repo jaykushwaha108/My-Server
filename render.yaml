@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: esp-ai-server
+    env: node
+    plan: starter          # $7/month - WebSocket always-on ke liye
+    # plan: free           # Free - 15 min inactivity par spin down hoga
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false        # Render dashboard mein manually set karo
+      - key: GOOGLE_STT_API_KEY
+        sync: false        # Render dashboard mein manually set karo
+      - key: SAMPLE_RATE
+        value: 16000
+      - key: BITS_PER_SAMPLE
+        value: 16
+      - key: CHANNELS
+        value: 1
+      # PORT → Render khud set karta hai, mat likho!
