@@ -1,76 +1,65 @@
 /**
  * ============================================================
- *  Universal ESP Audio AI Client  v2.0
- *  Works on: ESP32 · ESP32-C3 · ESP8266
+ *  ESP AI Client — Universal Library Style
+ *  ESP32 · ESP32-C3 · ESP8266
  * ============================================================
  *
  *  SIRF YEH 3 CHEEZEIN BADLEIN:
- *    1. WIFI_SSID      → Aapka WiFi naam
- *    2. WIFI_PASSWORD  → Aapka WiFi password
- *    3. SERVER_HOST    → Server wale PC ka IP (CMD: ipconfig)
+ *  ┌─────────────────────────────────────────────────────────┐
+ *  │  #define WIFI_SSID      "Aapka_WiFi"                    │
+ *  │  #define WIFI_PASSWORD  "Aapka_Password"                │
+ *  │  #define AI_SERVER_URL  "https://xxx.onrender.com"      │
+ *  └─────────────────────────────────────────────────────────┘
  *
- *  Baki sab config server se auto-fetch hoga! ✅
+ *  USE:
+ *  ┌─────────────────────────────────────────────────────────┐
+ *  │  // TEXT se poochna:                                    │
+ *  │  String ans = askAI("Aaj mausam kaisa hai?");           │
+ *  │  Serial.println(ans);                                   │
+ *  │                                                         │
+ *  │  // AUDIO se poochna (BOOT button daba ke bolo):        │
+ *  │  // Button press → record → answer Serial pe            │
+ *  └─────────────────────────────────────────────────────────┘
  *
- * ─── WIRING ───────────────────────────────────────────────────
+ *  WIRING — INMP441 Mic:
+ *  ┌────────────┬─────────┬──────────┬──────────┐
+ *  │  INMP441   │ ESP32   │ ESP32-C3 │ ESP8266  │
+ *  ├────────────┼─────────┼──────────┼──────────┤
+ *  │  VDD       │ 3.3V    │ 3.3V     │ 3.3V     │
+ *  │  GND       │ GND     │ GND      │ GND      │
+ *  │  SD(DATA)  │ GPIO22  │ GPIO6    │ GPIO3*   │
+ *  │  SCK       │ GPIO26  │ GPIO4    │ GPIO15   │
+ *  │  WS        │ GPIO25  │ GPIO5    │ GPIO2    │
+ *  │  L/R       │ GND     │ GND      │ GND      │
+ *  └────────────┴─────────┴──────────┴──────────┘
+ *  * ESP8266: GPIO3 = Serial RX pin (shared, debug limited)
  *
- *  ESP32 / ESP32-C3 → INMP441:
- *  ┌──────────────┬──────────┬──────────────┐
- *  │  INMP441     │  ESP32   │  ESP32-C3    │
- *  ├──────────────┼──────────┼──────────────┤
- *  │  VDD         │  3.3V    │  3.3V        │
- *  │  GND         │  GND     │  GND         │
- *  │  SD (DATA)   │  GPIO22  │  GPIO6       │
- *  │  SCK         │  GPIO26  │  GPIO4       │
- *  │  WS (LRCK)  │  GPIO25  │  GPIO5       │
- *  │  L/R         │  GND     │  GND (Mono)  │
- *  └──────────────┴──────────┴──────────────┘
- *
- *  ESP8266 → INMP441:
- *  ┌──────────────┬─────────────────────────────────────────┐
- *  │  INMP441     │  ESP8266 (NodeMCU)                      │
- *  ├──────────────┼─────────────────────────────────────────┤
- *  │  VDD         │  3.3V                                   │
- *  │  GND         │  GND                                    │
- *  │  SD (DATA)   │  GPIO3 (RX) ⚠️ Serial1 use karo debug   │
- *  │  SCK         │  GPIO15                                 │
- *  │  WS (LRCK)  │  GPIO2                                  │
- *  │  L/R         │  GND                                    │
- *  └──────────────┴─────────────────────────────────────────┘
- *
- *  BUTTON:
- *  ESP32/C3:  GPIO 0  (Built-in BOOT button)
- *  ESP8266:   GPIO 0  (FLASH button on NodeMCU)
- *
- *  LIBRARIES (Arduino Library Manager):
+ *  LIBRARIES (Arduino Library Manager se install karo):
  *  ✅ ArduinoWebsockets  by Gil Maimon
  *  ✅ ArduinoJson        by Benoit Blanchon
  * ============================================================
  */
 
-// ════════════════════════════════════════════════════════════
-//   ⚙️  SIRF YEH SETTINGS BADLEIN  ⚙️
-// ════════════════════════════════════════════════════════════
+// ╔════════════════════════════════════════════════════════════╗
+// ║          ⚙️  SIRF YEH 3 SETTINGS BADLEIN  ⚙️              ║
+// ╚════════════════════════════════════════════════════════════╝
 
-// ── WiFi Credentials ─────────────────────────────────────────
 #define WIFI_SSID      "Aapka_WiFi_Naam"
 #define WIFI_PASSWORD  "Aapka_WiFi_Password"
 
-// ── Deployment Mode ──────────────────────────────────────────
-// Option A: LOCAL server (apne PC pe)
-#define SERVER_HOST    "192.168.1.100"    // ← CMD mein: ipconfig → IPv4
-#define SERVER_PORT    8080
-// #define USE_RENDER                     // ← LOCAL mode (default)
-
-// Option B: RENDER cloud (comment out A, uncomment B)
-// #define SERVER_HOST  "esp-ai-server.onrender.com"  // ← Render URL (without https://)
-// #define SERVER_PORT  443
-// #define USE_RENDER                                  // ← HTTPS + WSS enable hoga
+// Server URL — LOCAL ya RENDER dono kaam karte hain:
+// Local:  "http://192.168.1.100:8080"    (CMD: ipconfig → IPv4)
+// Render: "https://xxx.onrender.com"     (Render dashboard se)
+#define AI_SERVER_URL  "https://your-server.onrender.com"
 
 // ════════════════════════════════════════════════════════════
 
-// ─── Board Detection ──────────────────────────────────────────
+// ─── Ye mat badlo (auto-detect hoga) ────────────────────────
+#define RECORD_BUTTON  0    // GPIO 0 = BOOT/FLASH button (har board pe hai)
+#define MAX_RECORD_SEC 15   // Max recording time (seconds)
+
+// ─── Board Detection ─────────────────────────────────────────
 #if defined(ESP32)
-  // ESP32 (classic, WROOM, S2, S3, C3 sab)
   #include <WiFi.h>
   #include <HTTPClient.h>
   #include <driver/i2s.h>
@@ -78,271 +67,283 @@
   #include <ArduinoJson.h>
 
   #if defined(CONFIG_IDF_TARGET_ESP32C3)
-    // ESP32-C3 pins
-    #define BOARD_NAME     "ESP32-C3"
-    #define I2S_SD_PIN     6
-    #define I2S_SCK_PIN    4
-    #define I2S_WS_PIN     5
-  #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-    // ESP32-S2 / S3 pins
-    #define BOARD_NAME     "ESP32-S2/S3"
-    #define I2S_SD_PIN     34
-    #define I2S_SCK_PIN    26
-    #define I2S_WS_PIN     25
+    #define BOARD_NAME  "ESP32-C3"
+    #define I2S_SD  6
+    #define I2S_SCK 4
+    #define I2S_WS  5
   #else
-    // ESP32 classic pins
-    #define BOARD_NAME     "ESP32"
-    #define I2S_SD_PIN     22
-    #define I2S_SCK_PIN    26
-    #define I2S_WS_PIN     25
+    #define BOARD_NAME  "ESP32"
+    #define I2S_SD  22
+    #define I2S_SCK 26
+    #define I2S_WS  25
   #endif
 
-  #define RECORD_BUTTON  0    // BOOT button
-  #define LED_PIN        2    // Built-in LED
-  #define HAS_I2S_HARDWARE true
+  #define LED_BUILTIN_PIN 2
 
 #elif defined(ESP8266)
-  // ESP8266 (NodeMCU, D1 Mini, etc.)
   #include <ESP8266WiFi.h>
   #include <ESP8266HTTPClient.h>
+  #include <WiFiClientSecureBearSSL.h>
   #include <i2s.h>
   #include <ArduinoWebsockets.h>
   #include <ArduinoJson.h>
 
-  #define BOARD_NAME     "ESP8266"
-  // ESP8266 I2S pins are FIXED (cannot change):
-  #define I2S_SD_PIN     3    // GPIO3 = RX (shared with Serial!)
-  #define I2S_SCK_PIN    15   // GPIO15
-  #define I2S_WS_PIN     2    // GPIO2
-  #define RECORD_BUTTON  0    // FLASH button
-  #define LED_PIN        2    // Built-in LED (shared with WS pin! Use LED_BUILTIN)
-  #define HAS_I2S_HARDWARE true
+  #define BOARD_NAME  "ESP8266"
+  #define I2S_SD  3
+  #define I2S_SCK 15
+  #define I2S_WS  2
+  #define LED_BUILTIN_PIN LED_BUILTIN
 
 #else
-  #error "Unsupported board! ESP32, ESP32-C3 ya ESP8266 use karo."
+  #error "ESP32 ya ESP8266 use karo!"
 #endif
 
 using namespace websockets;
 
-// ─── Runtime Config (server se fetch hoga) ───────────────────
-struct DeviceConfig {
-  int  sampleRate    = 16000;
-  int  bitsPerSample = 16;
-  int  channels      = 1;
-  int  chunkSize     = 512;
-  int  maxRecordSec  = 30;
-  char version[10]   = "unknown";
-  bool fetched       = false;
-};
+// ─── URL Parse helpers ────────────────────────────────────────
+// AI_SERVER_URL se host aur port nikalna
+String serverHost() {
+  String url = AI_SERVER_URL;
+  url.replace("https://", "");
+  url.replace("http://", "");
+  int slash = url.indexOf('/');
+  if (slash > 0) url = url.substring(0, slash);
+  int colon = url.indexOf(':');
+  if (colon > 0) url = url.substring(0, colon);
+  return url;
+}
 
-DeviceConfig cfg;
+int serverPort() {
+  String url = AI_SERVER_URL;
+  if (url.startsWith("https")) return 443;
+  // Local HTTP se port nikalo
+  int colonAfterProto = url.indexOf("://") + 3;
+  String rest = url.substring(colonAfterProto);
+  int colon = rest.indexOf(':');
+  if (colon < 0) return 80;
+  int slash = rest.indexOf('/', colon);
+  String portStr = (slash > 0) ? rest.substring(colon+1, slash) : rest.substring(colon+1);
+  return portStr.toInt();
+}
+
+bool isSecure() {
+  return String(AI_SERVER_URL).startsWith("https");
+}
 
 // ─── State ────────────────────────────────────────────────────
-WebsocketsClient wsClient;
-bool isConnected  = false;
-bool isRecording  = false;
+WebsocketsClient ws;
+bool wsConnected  = false;
 bool serverReady  = false;
+bool isRecording  = false;
 
-// ─── Helpers ──────────────────────────────────────────────────
-void safePrint(const String& msg)  { Serial.println(msg); }
-void safePrint(const char*   msg)  { Serial.println(msg); }
+// Server se fetched config
+int  CFG_SAMPLE_RATE  = 16000;
+int  CFG_CHUNK_SIZE   = 512;
+int  CFG_BITS         = 16;
+
+// ══════════════════════════════════════════════════════════════
+//   CORE FUNCTION 1: askAI(text)
+//   Text bhejo → AI ka jawab lo (HTTP POST)
+//   Kahan se bhi call kar sakte ho!
+// ══════════════════════════════════════════════════════════════
+String askAI(String question) {
+  if (WiFi.status() != WL_CONNECTED) return "ERROR: WiFi nahi hai";
+
+  String url = String(AI_SERVER_URL) + "/api/ask";
+  String requestBody = "{\"text\":\"" + question + "\"}";
+
+  Serial.println("\n📤 askAI(): " + question);
+
+  HTTPClient http;
+
+  #if defined(ESP8266)
+    if (isSecure()) {
+      BearSSL::WiFiClientSecure client;
+      client.setInsecure();
+      http.begin(client, url);
+    } else {
+      WiFiClient client;
+      http.begin(client, url);
+    }
+  #else
+    http.begin(url);
+  #endif
+
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(15000);
+
+  int code = http.POST(requestBody);
+
+  if (code == 200) {
+    String resp = http.getString();
+    StaticJsonDocument<512> doc;
+    if (!deserializeJson(doc, resp)) {
+      String answer = doc["response"] | "No response";
+      Serial.println("✅ AI: " + answer);
+      http.end();
+      return answer;
+    }
+  }
+
+  Serial.println("❌ askAI error, HTTP: " + String(code));
+  http.end();
+  return "ERROR: Server se jawab nahi mila (HTTP " + String(code) + ")";
+}
 
 // ══════════════════════════════════════════════════════════════
 //   SETUP
 // ══════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  delay(500);
 
-  Serial.println(F("\n╔════════════════════════════════════════╗"));
-  Serial.println(F("║   Universal ESP Audio AI Client  🎙️🤖   ║"));
-  Serial.print  (F("║   Board: "));
-  Serial.print  (BOARD_NAME);
-  Serial.println(F("                           ║"));
-  Serial.println(F("╚════════════════════════════════════════╝\n"));
+  Serial.println(F("\n╔══════════════════════════════════════════╗"));
+  Serial.println(F("║     ESP AI Client  🤖  Universal          ║"));
+  Serial.print  (F("║     Board: ")); Serial.print(BOARD_NAME);
+  Serial.println(F("                         ║"));
+  Serial.println(F("║     Mode : Text (HTTP) + Audio (WS)      ║"));
+  Serial.println(F("╚══════════════════════════════════════════╝\n"));
+
+  // Server URL print karo
+  Serial.print(F("🌐 Server: ")); Serial.println(AI_SERVER_URL);
 
   pinMode(RECORD_BUTTON, INPUT_PULLUP);
-  #ifdef LED_PIN
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
-  #endif
+  pinMode(LED_BUILTIN_PIN, OUTPUT);
+  digitalWrite(LED_BUILTIN_PIN, LOW);
 
-  // WiFi → Config Fetch → I2S → WebSocket
   connectWiFi();
-  fetchConfigFromServer();
+  fetchConfig();
   setupI2S();
-  connectWebSocket();
+  connectWS();
 
-  Serial.println(F("✅ Setup complete!"));
-  Serial.println(F("📌 BOOT/FLASH button dabao aur bolein!"));
+  Serial.println(F("\n✅ Ready!"));
+  Serial.println(F("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"));
+  Serial.println(F("📝 TEXT  mode: askAI(\"sawaal\") call karo"));
+  Serial.println(F("🎙️  AUDIO mode: BOOT button dabao aur bolo"));
+  Serial.println(F("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"));
+
+  // ── Example: startup mein ek text question karo ──
+  // String ans = askAI("Mera naam kya hai?");
+  // Serial.println("Answer: " + ans);
 }
 
 // ══════════════════════════════════════════════════════════════
-//   MAIN LOOP
+//   LOOP
 // ══════════════════════════════════════════════════════════════
 void loop() {
-  // WebSocket messages process karo
-  if (isConnected) {
-    wsClient.poll();
-  } else {
-    Serial.println(F("🔄 Reconnect..."));
-    delay(3000);
-    connectWebSocket();
-    return;
+  // WebSocket poll (audio ke liye)
+  if (wsConnected) ws.poll();
+
+  // Reconnect agar WS gir gaya
+  if (!wsConnected) {
+    static unsigned long lastRetry = 0;
+    if (millis() - lastRetry > 5000) {
+      connectWS();
+      lastRetry = millis();
+    }
   }
 
   bool buttonHeld = (digitalRead(RECORD_BUTTON) == LOW);
 
-  // Start recording
+  // AUDIO recording start
   if (buttonHeld && !isRecording && serverReady) {
-    startRecording();
+    startAudioRecording();
   }
 
-  // Stream audio
+  // Audio stream kar raha hai
   if (isRecording) {
-    sendAudioChunk();
+    streamAudioChunk();
 
-    // Auto-stop after maxRecordSec
+    // Auto-stop
     static unsigned long recStart = 0;
     if (!recStart) recStart = millis();
-    if (millis() - recStart > (unsigned long)cfg.maxRecordSec * 1000) {
-      Serial.println(F("\n⏰ Max duration reached, auto-stop!"));
-      stopRecording();
+    if (millis() - recStart > (unsigned long)MAX_RECORD_SEC * 1000) {
+      Serial.println(F("\n⏰ Max time, auto-stop!"));
+      stopAudioRecording();
       recStart = 0;
     }
     if (!buttonHeld) recStart = 0;
   }
 
-  // Stop recording
+  // Recording stop
   if (!buttonHeld && isRecording) {
-    stopRecording();
+    stopAudioRecording();
   }
 
-  // Button daba par server ready nahi
-  if (buttonHeld && !serverReady && isConnected) {
-    Serial.println(F("⏳ Server ready nahi hai..."));
-    delay(300);
-  }
+  // ── YAHAN APNA CODE LIKHEIN ──────────────────────────────
+  // Example: Sensor se data lo aur AI se analyze karwao
+  // if (millis() % 30000 == 0) {           // har 30 sec
+  //   float temp = 28.5;
+  //   String q = "Temperature " + String(temp) + " degree C hai, kya theek hai?";
+  //   String ans = askAI(q);
+  //   Serial.println(ans);
+  // }
+  // ─────────────────────────────────────────────────────────
 }
 
 // ══════════════════════════════════════════════════════════════
-//   WIFI
+//   WiFi Connect
 // ══════════════════════════════════════════════════════════════
 void connectWiFi() {
-  Serial.print(F("📶 WiFi: "));
-  Serial.println(WIFI_SSID);
-
+  Serial.print(F("📶 WiFi: ")); Serial.println(WIFI_SSID);
   #if defined(ESP32)
     WiFi.mode(WIFI_STA);
   #endif
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  int tries = 0;
+  int t = 0;
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(F("."));
-    if (++tries > 40) {
-      Serial.println(F("\n❌ WiFi failed! Restarting..."));
-      ESP.restart();
-    }
+    delay(500); Serial.print(".");
+    if (++t > 40) { Serial.println(F("\n❌ WiFi failed!")); ESP.restart(); }
   }
-
-  Serial.println(F("\n✅ WiFi Connected!"));
-  Serial.print(F("   IP: "));
-  Serial.println(WiFi.localIP());
+  Serial.println(F("\n✅ WiFi OK: ") + WiFi.localIP().toString());
 }
 
 // ══════════════════════════════════════════════════════════════
-//   CONFIG FETCH FROM SERVER  (http://SERVER_IP:PORT/config)
+//   Config Fetch (server se audio settings lo)
 // ══════════════════════════════════════════════════════════════
-void fetchConfigFromServer() {
-  // USE_RENDER = https://, else http://
-  #ifdef USE_RENDER
-    String url = "https://";
-  #else
-    String url = "http://";
-  #endif
-
-  url += SERVER_HOST;
-
-  #ifndef USE_RENDER
-    // Port sirf local mein chahiye; Render pe 443 default hota hai
-    url += ":";
-    url += SERVER_PORT;
-  #endif
-
-  url += "/config";
-
-  Serial.print(F("⬇️  Config fetch: "));
-  Serial.println(url);
+void fetchConfig() {
+  String url = String(AI_SERVER_URL) + "/config";
+  Serial.print(F("⬇️  Config: ")); Serial.println(url);
 
   HTTPClient http;
 
   #if defined(ESP8266)
-    #ifdef USE_RENDER
-      // ESP8266 + HTTPS: needs WiFiClientSecure
-      WiFiClientSecure secClient;
-      secClient.setInsecure();           // SSL verify skip (simple setup)
-      http.begin(secClient, url);
-    #else
-      WiFiClient wifiClient;
-      http.begin(wifiClient, url);
-    #endif
+    if (isSecure()) {
+      BearSSL::WiFiClientSecure c; c.setInsecure(); http.begin(c, url);
+    } else {
+      WiFiClient c; http.begin(c, url);
+    }
   #else
-    // ESP32 handles HTTPS automatically
     http.begin(url);
   #endif
 
-  http.setTimeout(5000);
-  int httpCode = http.GET();
-
-  if (httpCode == HTTP_CODE_OK) {
-    String payload = http.getString();
-    Serial.println(F("✅ Config received:"));
-    Serial.println(payload);
-
-    // JSON parse karo
+  http.setTimeout(8000);
+  int code = http.GET();
+  if (code == 200) {
     StaticJsonDocument<256> doc;
-    DeserializationError err = deserializeJson(doc, payload);
-
-    if (!err) {
-      cfg.sampleRate    = doc["sampleRate"]    | 16000;
-      cfg.bitsPerSample = doc["bitsPerSample"] | 16;
-      cfg.channels      = doc["channels"]      | 1;
-      cfg.chunkSize     = doc["chunkSize"]     | 512;
-      cfg.maxRecordSec  = doc["maxRecordSec"]  | 30;
-      strlcpy(cfg.version, doc["version"] | "?", sizeof(cfg.version));
-      cfg.fetched = true;
-
-      Serial.println(F("📋 Loaded config:"));
-      Serial.print  (F("   SampleRate    : ")); Serial.println(cfg.sampleRate);
-      Serial.print  (F("   BitsPerSample : ")); Serial.println(cfg.bitsPerSample);
-      Serial.print  (F("   Channels      : ")); Serial.println(cfg.channels);
-      Serial.print  (F("   ChunkSize     : ")); Serial.println(cfg.chunkSize);
-      Serial.print  (F("   MaxRecordSec  : ")); Serial.println(cfg.maxRecordSec);
-      Serial.print  (F("   ServerVersion : ")); Serial.println(cfg.version);
-    } else {
-      Serial.print(F("⚠️  JSON parse error: ")); Serial.println(err.c_str());
-      Serial.println(F("   Default config use ho rahi hai."));
+    if (!deserializeJson(doc, http.getString())) {
+      CFG_SAMPLE_RATE = doc["sampleRate"]  | 16000;
+      CFG_CHUNK_SIZE  = doc["chunkSize"]   | 512;
+      CFG_BITS        = doc["bitsPerSample"]| 16;
+      Serial.println(F("✅ Config loaded: SR=") + String(CFG_SAMPLE_RATE));
     }
   } else {
-    Serial.print(F("⚠️  Config fetch failed (HTTP ")); Serial.print(httpCode); Serial.println(F("). Default use karega."));
+    Serial.println(F("⚠️  Config failed, defaults use karega"));
   }
-
   http.end();
 }
 
 // ══════════════════════════════════════════════════════════════
-//   I2S MIC SETUP
+//   I2S Mic Setup
 // ══════════════════════════════════════════════════════════════
 void setupI2S() {
-  Serial.println(F("🎤 I2S Mic setup..."));
+  Serial.println(F("🎤 I2S setup..."));
 
   #if defined(ESP32)
-    i2s_config_t i2sCfg = {
+    i2s_config_t cfg = {
       .mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-      .sample_rate          = (uint32_t)cfg.sampleRate,
-      .bits_per_sample      = I2S_BITS_PER_SAMPLE_32BIT, // INMP441 → 32bit, we shift to 16
+      .sample_rate          = (uint32_t)CFG_SAMPLE_RATE,
+      .bits_per_sample      = I2S_BITS_PER_SAMPLE_32BIT,
       .channel_format       = I2S_CHANNEL_FMT_ONLY_LEFT,
       .communication_format = I2S_COMM_FORMAT_STAND_I2S,
       .intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1,
@@ -352,209 +353,118 @@ void setupI2S() {
       .tx_desc_auto_clear   = false,
       .fixed_mclk           = 0
     };
-
-    i2s_pin_config_t pinCfg = {
-      .bck_io_num   = I2S_SCK_PIN,
-      .ws_io_num    = I2S_WS_PIN,
+    i2s_pin_config_t pins = {
+      .bck_io_num   = I2S_SCK,
+      .ws_io_num    = I2S_WS,
       .data_out_num = I2S_PIN_NO_CHANGE,
-      .data_in_num  = I2S_SD_PIN
+      .data_in_num  = I2S_SD
     };
-
-    if (i2s_driver_install(I2S_NUM_0, &i2sCfg, 0, NULL) != ESP_OK) {
-      Serial.println(F("❌ I2S driver install failed!"));
-      return;
-    }
-    if (i2s_set_pin(I2S_NUM_0, &pinCfg) != ESP_OK) {
-      Serial.println(F("❌ I2S pins set failed!"));
-      return;
-    }
+    i2s_driver_install(I2S_NUM_0, &cfg, 0, NULL);
+    i2s_set_pin(I2S_NUM_0, &pins);
     i2s_zero_dma_buffer(I2S_NUM_0);
 
   #elif defined(ESP8266)
-    // ESP8266 I2S (Fixed pins: DATA=GPIO3, CLK=GPIO15, WS=GPIO2)
-    i2s_rxtx_begin(true, false);           // RX=true, TX=false
-    i2s_set_rate(cfg.sampleRate);
-    Serial.println(F("⚠️  ESP8266: I2S pins fixed (DATA=GPIO3, CLK=GPIO15, WS=GPIO2)"));
-    Serial.println(F("⚠️  GPIO3 = Serial RX shared! Debug limited on 8266."));
+    i2s_rxtx_begin(true, false);
+    i2s_set_rate(CFG_SAMPLE_RATE);
   #endif
 
-  Serial.println(F("✅ I2S Mic ready!"));
+  Serial.println(F("✅ I2S OK"));
 }
 
 // ══════════════════════════════════════════════════════════════
-//   WEBSOCKET CONNECT  (ws:// local | wss:// Render)
+//   WebSocket Connect (Audio ke liye)
 // ══════════════════════════════════════════════════════════════
-void connectWebSocket() {
-  #ifdef USE_RENDER
-    // Render = wss:// (secure, port 443)
-    String url = "wss://";
-    url += SERVER_HOST;
-    url += "/";
-    Serial.print(F("🔌 WSS (Render): ")); Serial.println(url);
-  #else
-    // Local = ws:// 
-    String url = "ws://";
-    url += SERVER_HOST;
-    url += ":";
-    url += SERVER_PORT;
-    url += "/";
-    Serial.print(F("🔌 WS (Local): ")); Serial.println(url);
-  #endif
+void connectWS() {
+  Serial.println(F("🔌 WS connecting..."));
 
-  wsClient.onMessage(onWsMessage);
-  wsClient.onEvent([](WebsocketsEvent event, String data) {
-    if (event == WebsocketsEvent::ConnectionOpened) {
-      Serial.println(F("✅ WebSocket Connected!"));
-      isConnected = true;
-
-      // Device info server ko bhejo
-      String info = "CMD:INFO:{\"board\":\"";
-      info += BOARD_NAME;
-      info += "\",\"sampleRate\":";
-      info += cfg.sampleRate;
-      info += ",\"configFetched\":";
-      info += cfg.fetched ? "true" : "false";
-      #ifdef USE_RENDER
-        info += ",\"mode\":\"render\"";
-      #else
-        info += ",\"mode\":\"local\"";
-      #endif
-      info += "}";
-      wsClient.send(info);
+  ws.onMessage(onWsMessage);
+  ws.onEvent([](WebsocketsEvent e, String d) {
+    if (e == WebsocketsEvent::ConnectionOpened) {
+      Serial.println(F("✅ WS connected!"));
+      wsConnected = true;
+      // Board info bhejo
+      ws.send("CMD:INFO:{\"board\":\"" + String(BOARD_NAME) + "\",\"mode\":\"" +
+              (isSecure() ? "render" : "local") + "\"}");
     }
-    else if (event == WebsocketsEvent::ConnectionClosed) {
-      Serial.println(F("🔌 WebSocket Disconnected!"));
-      isConnected = false;
-      serverReady = false;
+    else if (e == WebsocketsEvent::ConnectionClosed) {
+      Serial.println(F("🔌 WS disconnected"));
+      wsConnected = false; serverReady = false;
     }
-    else if (event == WebsocketsEvent::GotPing) {
-      wsClient.pong();
-    }
+    else if (e == WebsocketsEvent::GotPing) { ws.pong(); }
   });
 
-  #ifdef USE_RENDER
-    // ESP32 + WSS: ArduinoWebsockets handles SSL automatically
-    // ESP8266 + WSS: Set insecure (no cert verify)
-    #if defined(ESP8266)
-      wsClient.setInsecure();
-    #endif
-    bool ok = wsClient.connect(SERVER_HOST, 443, "/");
-  #else
-    bool ok = wsClient.connect(SERVER_HOST, SERVER_PORT, "/");
+  #if defined(ESP8266)
+    if (isSecure()) ws.setInsecure();
   #endif
 
-  if (!ok) {
-    #ifdef USE_RENDER
-      Serial.println(F("❌ WS connect failed! Render URL sahi hai? Internet on hai?"));
-    #else
-      Serial.println(F("❌ WS connect failed! Server chal raha hai? IP sahi hai?"));
-    #endif
-    isConnected = false;
-  }
+  bool ok = isSecure()
+    ? ws.connect(serverHost(), 443, "/")
+    : ws.connect(serverHost(), serverPort(), "/");
+
+  if (!ok) Serial.println(F("❌ WS connect failed!"));
 }
 
 // ══════════════════════════════════════════════════════════════
-//   RECORDING CONTROL
+//   Audio Recording Functions
 // ══════════════════════════════════════════════════════════════
-void startRecording() {
-  Serial.println(F("\n🎙️ Recording SHURU - BOLIYE!"));
+void startAudioRecording() {
+  Serial.println(F("\n🎙️  AUDIO MODE - Boliye!"));
   isRecording = true;
-  #ifdef LED_PIN
-    digitalWrite(LED_PIN, HIGH);
-  #endif
-  wsClient.send("CMD:START");
+  digitalWrite(LED_BUILTIN_PIN, HIGH);
+  ws.send("CMD:START");
 }
 
-void stopRecording() {
-  Serial.println(F("\n🛑 Recording BAND. Processing..."));
+void stopAudioRecording() {
+  Serial.println(F("\n🛑 Recording stop, processing..."));
   isRecording = false;
-  #ifdef LED_PIN
-    digitalWrite(LED_PIN, LOW);
-  #endif
-  wsClient.send("CMD:END");
-  Serial.println(F("⏳ AI jawab aa raha hai..."));
+  digitalWrite(LED_BUILTIN_PIN, LOW);
+  ws.send("CMD:END");
 }
 
-// ══════════════════════════════════════════════════════════════
-//   AUDIO CHUNK SEND
-// ══════════════════════════════════════════════════════════════
-void sendAudioChunk() {
+void streamAudioChunk() {
   #if defined(ESP32)
-    int32_t raw32[cfg.chunkSize / 4];
+    int32_t raw[CFG_CHUNK_SIZE / 4];
     size_t  bytesRead = 0;
-
-    i2s_read(I2S_NUM_0, raw32, sizeof(raw32), &bytesRead, portMAX_DELAY);
-    if (bytesRead == 0) return;
-
-    int       samples = bytesRead / 4;
-    int16_t   pcm16[samples];
-
-    for (int i = 0; i < samples; i++) {
-      pcm16[i] = (int16_t)(raw32[i] >> 11);  // 32-bit → 16-bit (INMP441)
-    }
-
-    wsClient.sendBinary((const char*)pcm16, samples * 2);
+    i2s_read(I2S_NUM_0, raw, sizeof(raw), &bytesRead, portMAX_DELAY);
+    if (!bytesRead) return;
+    int     n    = bytesRead / 4;
+    int16_t pcm[n];
+    for (int i = 0; i < n; i++) pcm[i] = (int16_t)(raw[i] >> 11);
+    ws.sendBinary((const char*)pcm, n * 2);
 
   #elif defined(ESP8266)
-    // ESP8266 I2S returns 32-bit values (upper 16 = left, lower 16 = right)
-    uint32_t raw32[cfg.chunkSize / 4];
-    int      count = 0;
-    int16_t  pcm16[cfg.chunkSize / 4];
-
-    while (i2s_rx_available() && count < (cfg.chunkSize / 4)) {
-      uint32_t sample = i2s_read_sample(false);
-      pcm16[count++]  = (int16_t)(sample & 0xFFFF);
+    int16_t pcm[CFG_CHUNK_SIZE / 4];
+    int     n = 0;
+    while (i2s_rx_available() && n < CFG_CHUNK_SIZE / 4) {
+      pcm[n++] = (int16_t)(i2s_read_sample(false) & 0xFFFF);
     }
-
-    if (count > 0) {
-      wsClient.sendBinary((const char*)pcm16, count * 2);
-    }
+    if (n > 0) ws.sendBinary((const char*)pcm, n * 2);
   #endif
 }
 
 // ══════════════════════════════════════════════════════════════
-//   WEBSOCKET MESSAGE HANDLER
+//   WebSocket Message Handler
 // ══════════════════════════════════════════════════════════════
 void onWsMessage(WebsocketsMessage msg) {
   String m = msg.data();
 
-  if (m.startsWith("READY:")) {
-    serverReady = true;
-    Serial.println(F("\n✅ Server ready!"));
-    Serial.print  (F("   ")); Serial.println(m.substring(6));
-    Serial.println(F("📌 BOOT button dabao aur bolein!"));
-  }
-  else if (m == "ACK:START") {
-    Serial.println(F("✅ Recording server ne confirm ki."));
-  }
-  else if (m.startsWith("STATUS:")) {
-    Serial.print(F("⏳ ")); Serial.println(m.substring(7));
-  }
-  else if (m.startsWith("STT:")) {
-    String heard = m.substring(4);
-    Serial.println(F("\n┌────────────────────────────────────┐"));
-    Serial.print  (F("│ 🗣️  Suna: "));
-    Serial.println(heard);
-    Serial.println(F("└────────────────────────────────────┘"));
+  if      (m.startsWith("READY:"))    { serverReady = true; Serial.println(F("✅ Server ready! Button dabao ya askAI() call karo.")); }
+  else if (m == "ACK:START")          { Serial.println(F("🔴 Recording...")); }
+  else if (m.startsWith("STATUS:"))   { Serial.print(F("⏳ ")); Serial.println(m.substring(7)); }
+  else if (m.startsWith("STT:"))      {
+    Serial.println(F("\n┌──────────────────────────────────┐"));
+    Serial.print  (F("│ 🗣️  Suna: ")); Serial.println(m.substring(4));
+    Serial.println(F("└──────────────────────────────────┘"));
   }
   else if (m.startsWith("RESPONSE:")) {
-    String resp = m.substring(9);
-    Serial.println(F("\n╔════════════════════════════════════╗"));
-    Serial.println(F("║         AI KA JAWAB  🤖             ║"));
-    Serial.println(F("╠════════════════════════════════════╣"));
-    Serial.println(resp);
-    Serial.println(F("╚════════════════════════════════════╝\n"));
-    Serial.println(F("📌 Button dabao aur dobara puchho!"));
+    String r = m.substring(9);
+    Serial.println(F("\n╔══════════════════════════════════╗"));
+    Serial.println(F("║        AI KA JAWAB  🤖            ║"));
+    Serial.println(F("╠══════════════════════════════════╣"));
+    Serial.println(r);
+    Serial.println(F("╚══════════════════════════════════╝\n"));
     serverReady = true;
   }
-  else if (m == "PONG") {
-    Serial.println(F("🏓 Pong!"));
-  }
-  else if (m.startsWith("ERROR:")) {
-    Serial.print(F("❌ Error: ")); Serial.println(m.substring(6));
-    serverReady = true;
-  }
-  else {
-    Serial.print(F("📨 ")); Serial.println(m);
-  }
+  else if (m.startsWith("ERROR:"))    { Serial.print(F("❌ ")); Serial.println(m.substring(6)); serverReady = true; }
+  else if (m == "PONG")               { /* alive */ }
 }

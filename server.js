@@ -65,9 +65,17 @@ const DEVICE_CONFIG = {
 // ─── HTTP Server (Config endpoint + WS upgrade) ───────────────
 const httpServer = http.createServer((req, res) => {
 
-  // CORS headers (browser testing ke liye)
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Token');
+
+  // OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   // GET /config → ESP device config fetch karta hai
   if (req.url === '/config' && req.method === 'GET') {
@@ -90,9 +98,46 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // ─── POST /api/ask → TEXT question → AI answer ────────────────
+  // ESP directly text bhejta hai, JSON response milta hai
+  // Body: {"text": "aapka sawaal"}
+  // Response: {"ok": true, "response": "AI ka jawab"}
+  if (req.url === '/api/ask' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      const clientIP = req.socket.remoteAddress;
+      try {
+        const parsed   = JSON.parse(body);
+        const question = (parsed.text || '').trim();
+
+        if (!question) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'text field empty hai' }));
+          return;
+        }
+
+        console.log(`\n📝 [${timestamp()}] /api/ask from ${clientIP}`);
+        console.log(`   Question: "${question}"`);
+
+        const aiResponse = await askGemini(question);
+        console.log(`   Answer  : "${aiResponse}"\n`);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, response: aiResponse }));
+
+      } catch (err) {
+        console.error(`❌ /api/ask error: ${err.message}`);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   // Default 404
   res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('ESP AI Server - Use /config or /health\n');
+  res.end('ESP AI Server v2\n  GET  /config\n  GET  /health\n  POST /api/ask\n  WS   /  (audio streaming)\n');
 });
 
 // ─── WebSocket Server (same port as HTTP) ────────────────────
